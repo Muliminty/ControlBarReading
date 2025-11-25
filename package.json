@@ -1,0 +1,193 @@
+{
+  "name": "secret-status-bar",
+  "displayName": "控制栏阅读",
+  "description": "在状态栏隐蔽显示 txt 文件内容",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "secretStatusBar.showContent",
+        "title": "显示隐藏内容",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.reload",
+        "title": "重新加载文件",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.config",
+        "title": "配置文件路径",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.selectFile",
+        "title": "选择文件",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.previousPage",
+        "title": "上一页",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.nextPage",
+        "title": "下一页",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.switchFile",
+        "title": "切换文件",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.toggleDisplay",
+        "title": "切换显示模式（Ctrl+Shift+T）",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.showRealContent",
+        "title": "显示真实内容",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.showDecoyContent",
+        "title": "显示迷惑内容",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.toggleDisplayMode",
+        "title": "切换显示模式",
+        "category": "控制栏阅读"
+      },
+      {
+        "command": "secretStatusBar.configureKeybindings",
+        "title": "配置快捷键",
+        "category": "控制栏阅读",
+        "icon": "$(keyboard)"
+      },
+      {
+        "command": "secretStatusBar.openSettings",
+        "title": "打开设置界面",
+        "category": "控制栏阅读",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "configuration": {
+      "title": "控制栏阅读",
+      "properties": {
+        "secretStatusBar.filePath": {
+          "type": "string",
+          "default": "${workspaceFolder}/secret.txt",
+          "description": "要读取的 txt 文件路径（支持变量：${workspaceFolder}）。提示：使用命令 'Secret Status Bar: 配置文件路径' 可以通过文件选择器选择文件，或直接编辑 secret-status-bar.config.json 文件"
+        },
+        "secretStatusBar.enableEncryption": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否启用内容加密（简单 Base64）"
+        },
+        "secretStatusBar.enableClickDialog": {
+          "type": "boolean",
+          "default": true,
+          "description": "点击状态栏图标时显示对话框"
+        },
+        "secretStatusBar.icon": {
+          "type": "string",
+          "default": "$(circle-outline)",
+          "description": "状态栏显示的图标（VS Code 图标 ID）"
+        },
+        "secretStatusBar.maxDisplayLength": {
+          "type": "number",
+          "default": 50,
+          "description": "状态栏最大显示字符数（超过会截断）"
+        },
+        "secretStatusBar.pageSize": {
+          "type": "number",
+          "default": 50,
+          "description": "每页显示的字符数（用于分页功能）"
+        },
+        "secretStatusBar.enableCache": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否启用阅读缓存（记住阅读位置）"
+        },
+        "secretStatusBar.files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "文件列表（支持多个文件切换，支持 ${workspaceFolder} 变量）"
+        },
+        "secretStatusBar.showRealContentKey": {
+          "type": "string",
+          "default": "ctrl+shift+space",
+          "description": "显示真实内容的快捷键（格式：ctrl+shift+key，mac使用cmd+shift+key）。提示：需要在VS Code快捷键设置中配置，使用命令 'Secret Status Bar: 配置快捷键' 来快速配置"
+        },
+        "secretStatusBar.showDecoyContentKey": {
+          "type": "string",
+          "default": "escape",
+          "description": "显示迷惑内容的快捷键。提示：需要在VS Code快捷键设置中配置"
+        },
+        "secretStatusBar.previousPageKey": {
+          "type": "string",
+          "default": "ctrl+up",
+          "description": "上一页的快捷键（格式：ctrl+key，mac使用cmd+key）。提示：需要在VS Code快捷键设置中配置"
+        },
+        "secretStatusBar.nextPageKey": {
+          "type": "string",
+          "default": "ctrl+down",
+          "description": "下一页的快捷键（格式：ctrl+key，mac使用cmd+key）。提示：需要在VS Code快捷键设置中配置"
+        },
+        "secretStatusBar.showPageInfo": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否在状态栏显示页码信息（第几页/总页数），默认不显示"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "secretStatusBar.toggleDisplay",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "editorTextFocus || !editorTextFocus"
+      },
+      {
+        "command": "secretStatusBar.previousPage",
+        "key": "ctrl+up",
+        "mac": "cmd+up",
+        "when": "editorTextFocus || !editorTextFocus"
+      },
+      {
+        "command": "secretStatusBar.nextPage",
+        "key": "ctrl+down",
+        "mac": "cmd+down",
+        "when": "editorTextFocus || !editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {}
+}
+
