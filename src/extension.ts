@@ -1021,15 +1021,19 @@ export function activate(context: vscode.ExtensionContext) {
     }
     
     /**
-     * 切换到上一页（只有在显示真实内容时才允许）
+     * 切换到上一页
+     * 只有在显示真实内容时才执行翻页
+     * 显示迷惑信息时，执行原有的快捷键功能（移动光标）
      */
     async function goToPreviousPage() {
-        // 只有在显示真实内容时才允许切换页码
+        // 如果显示迷惑信息，执行原有的快捷键功能（移动光标）
         if (!showRealContent) {
-            vscode.window.showWarningMessage('请先按住快捷键显示真实内容才能切换页码');
+            // 执行编辑器的向上移动光标命令
+            await vscode.commands.executeCommand('cursorUp');
             return;
         }
         
+        // 显示真实内容时，执行翻页功能
         if (currentPages.length === 0) {
             return;
         }
@@ -1065,15 +1069,19 @@ export function activate(context: vscode.ExtensionContext) {
     }
     
     /**
-     * 切换到下一页（只有在显示真实内容时才允许）
+     * 切换到下一页
+     * 只有在显示真实内容时才执行翻页
+     * 显示迷惑信息时，执行原有的快捷键功能（移动光标）
      */
     async function goToNextPage() {
-        // 只有在显示真实内容时才允许切换页码
+        // 如果显示迷惑信息，执行原有的快捷键功能（移动光标）
         if (!showRealContent) {
-            vscode.window.showWarningMessage('请先按住快捷键显示真实内容才能切换页码');
+            // 执行编辑器的向下移动光标命令
+            await vscode.commands.executeCommand('cursorDown');
             return;
         }
         
+        // 显示真实内容时，执行翻页功能
         if (currentPages.length === 0) {
             return;
         }
