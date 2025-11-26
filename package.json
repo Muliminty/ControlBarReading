@@ -26,6 +26,12 @@
         "category": "控制栏阅读"
       },
       {
+        "command": "secretStatusBar.search",
+        "title": "搜索内容",
+        "category": "控制栏阅读",
+        "icon": "$(search)"
+      },
+      {
         "command": "secretStatusBar.config",
         "title": "配置文件路径",
         "category": "控制栏阅读"

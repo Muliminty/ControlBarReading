@@ -31,6 +31,23 @@ interface ReadingState {
 }
 
 /**
+ * 搜索匹配结果接口
+ */
+interface SearchMatch {
+    index: number;        // 匹配位置在清理后内容中的索引
+    page: number;         // 匹配所在的页面（0-based）
+    context: string;      // 匹配上下文（用于显示）
+}
+
+/**
+ * 页面边界接口
+ */
+interface PageBoundary {
+    start: number;        // 页面在清理后内容中的起始位置
+    end: number;          // 页面在清理后内容中的结束位置
+}
+
+/**
  * 从 JSON 配置文件读取配置
  */
 async function loadConfigFromFile(context?: vscode.ExtensionContext): Promise<PluginConfig | null> {
@@ -191,6 +208,136 @@ function paginateContent(content: string, pageSize: number): string[] {
         pages.push(pageContent.trim());
     }
     return pages;
+}
+
+/**
+ * 构建页面边界映射表
+ * 通过查找每个页面内容在清理后内容中的位置来构建边界
+ */
+function buildPageBoundaries(
+    pages: string[],
+    cleanedContent: string,
+    pageSize: number
+): PageBoundary[] {
+    const boundaries: PageBoundary[] = [];
+    let searchStart = 0;
+    
+    for (let i = 0; i < pages.length; i++) {
+        const pageContent = pages[i].trim();
+        
+        if (pageContent.length === 0) {
+            // 空页面
+            const lastEnd = boundaries.length > 0 
+                ? boundaries[boundaries.length - 1].end 
+                : 0;
+            boundaries.push({
+                start: lastEnd,
+                end: lastEnd
+            });
+            continue;
+        }
+        
+        // 从上次搜索位置开始查找页面内容
+        const pageIndex = cleanedContent.indexOf(pageContent, searchStart);
+        
+        if (pageIndex >= 0) {
+            // 找到精确匹配
+            boundaries.push({
+                start: pageIndex,
+                end: pageIndex + pageContent.length
+            });
+            searchStart = pageIndex + pageContent.length;
+        } else {
+            // 如果找不到精确匹配，使用估算位置（基于 pageSize）
+            const estimatedStart = i * pageSize;
+            const estimatedEnd = Math.min(estimatedStart + pageContent.length, cleanedContent.length);
+            boundaries.push({
+                start: estimatedStart,
+                end: estimatedEnd
+            });
+            searchStart = estimatedEnd;
+        }
+    }
+    
+    return boundaries;
+}
+
+/**
+ * 根据位置计算所在的页面
+ */
+function calculatePageForPosition(
+    position: number,
+    boundaries: PageBoundary[]
+): number {
+    for (let i = 0; i < boundaries.length; i++) {
+        const boundary = boundaries[i];
+        if (position >= boundary.start && position < boundary.end) {
+            return i;
+        }
+    }
+    // 如果位置超出范围，返回最后一页
+    return Math.max(0, boundaries.length - 1);
+}
+
+/**
+ * 在内容中搜索匹配的文本
+ */
+function searchContent(
+    cleanedContent: string,
+    searchText: string,
+    pages: string[],
+    pageSize: number
+): SearchMatch[] {
+    const matches: SearchMatch[] = [];
+    
+    if (!searchText || searchText.trim().length === 0) {
+        return matches;
+    }
+    
+    // 构建页面边界映射
+    const boundaries = buildPageBoundaries(pages, cleanedContent, pageSize);
+    
+    // 转义特殊字符，支持普通文本搜索
+    const escapedSearchText = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchRegex = new RegExp(escapedSearchText, 'gi');
+    
+    // 限制搜索结果数量（最多100个）
+    const maxResults = 100;
+    let resultCount = 0;
+    
+    // 在清理后的内容中搜索所有匹配
+    let match;
+    const searchRegexGlobal = new RegExp(escapedSearchText, 'gi');
+    while ((match = searchRegexGlobal.exec(cleanedContent)) !== null && resultCount < maxResults) {
+        const matchIndex = match.index;
+        const matchLength = match[0].length;
+        
+        // 计算匹配所在的页面
+        const page = calculatePageForPosition(matchIndex, boundaries);
+        
+        // 提取上下文（前后各30个字符）
+        const contextStart = Math.max(0, matchIndex - 30);
+        const contextEnd = Math.min(cleanedContent.length, matchIndex + matchLength + 30);
+        let context = cleanedContent.substring(contextStart, contextEnd);
+        
+        // 如果上下文被截断，添加省略号
+        if (contextStart > 0) {
+            context = '...' + context;
+        }
+        if (contextEnd < cleanedContent.length) {
+            context = context + '...';
+        }
+        
+        matches.push({
+            index: matchIndex,
+            page: page,
+            context: context
+        });
+        
+        resultCount++;
+    }
+    
+    return matches;
 }
 
 /**
@@ -975,6 +1122,117 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(`已切换到: ${path.basename(fileList[currentFileIndex])}`);
     }
     
+    /**
+     * 跳转到指定页面
+     */
+    async function jumpToPage(targetPage: number) {
+        if (currentPages.length === 0) {
+            vscode.window.showWarningMessage('内容未加载，请先加载文件');
+            return;
+        }
+        
+        // 确保页码有效
+        const validPage = Math.max(0, Math.min(targetPage, currentPages.length - 1));
+        const filePath = fileList[currentFileIndex];
+        
+        if (!filePath) {
+            vscode.window.showWarningMessage('文件路径无效');
+            return;
+        }
+        
+        // 确保显示真实内容
+        if (!showRealContent) {
+            showRealContent = true;
+        }
+        
+        // 更新阅读状态
+        const enableCache = await getConfigValue('enableCache', true, context);
+        if (enableCache) {
+            saveReadingState(context, {
+                currentPage: validPage,
+                currentFile: filePath,
+                lastUpdateTime: Date.now()
+            });
+        }
+        
+        // 更新状态栏
+        const pageContent = currentPages[validPage] || '';
+        await updateStatusBar(
+            statusBarItem,
+            pageContent,
+            filePath,
+            validPage,
+            currentPages.length,
+            showRealContent,
+            context
+        );
+        
+        // 显示提示
+        vscode.window.showInformationMessage(
+            `已跳转到第 ${validPage + 1} 页（共 ${currentPages.length} 页）`
+        );
+    }
+    
+    /**
+     * 搜索内容并跳转
+     */
+    async function searchAndJump() {
+        // 检查内容是否已加载
+        if (!currentContent || currentPages.length === 0) {
+            await loadAndUpdate();
+            if (!currentContent || currentPages.length === 0) {
+                vscode.window.showWarningMessage('无法加载内容，请检查文件配置');
+                return;
+            }
+        }
+        
+        // 输入搜索关键词
+        const searchText = await vscode.window.showInputBox({
+            prompt: '请输入要搜索的内容',
+            placeHolder: '搜索关键词...',
+            ignoreFocusOut: true
+        });
+        
+        if (!searchText || searchText.trim().length === 0) {
+            return;
+        }
+        
+        // 获取分页大小
+        const pageSize = await getConfigValue('pageSize', 50, context);
+        
+        // 清理内容并搜索
+        const cleanedContent = cleanTextContent(currentContent);
+        const matches = searchContent(cleanedContent, searchText.trim(), currentPages, pageSize);
+        
+        // 处理搜索结果
+        if (matches.length === 0) {
+            vscode.window.showInformationMessage(`未找到匹配内容: "${searchText}"`);
+            return;
+        }
+        
+        if (matches.length === 1) {
+            // 只有一个匹配，直接跳转
+            await jumpToPage(matches[0].page);
+        } else {
+            // 多个匹配，显示选择列表
+            const items = matches.map((match, index) => ({
+                label: `第 ${match.page + 1} 页`,
+                description: match.context,
+                detail: `匹配位置: ${match.index + 1}`,
+                match: match
+            }));
+            
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: `找到 ${matches.length} 个匹配结果，请选择要跳转的位置`,
+                ignoreFocusOut: true
+            });
+            
+            if (selected) {
+                await jumpToPage(selected.match.page);
+            }
+        }
+    }
+    
     // 注册命令：显示内容
     const showContentCommand = vscode.commands.registerCommand(
         'secretStatusBar.showContent',
@@ -1239,6 +1497,14 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
     
+    // 注册命令：搜索内容
+    const searchCommand = vscode.commands.registerCommand(
+        'secretStatusBar.search',
+        async () => {
+            await searchAndJump();
+        }
+    );
+    
     // 注册命令：配置路径
     const configCommand = vscode.commands.registerCommand(
         'secretStatusBar.config',
@@ -1411,6 +1677,7 @@ export function activate(context: vscode.ExtensionContext) {
         statusBarItem,
         showContentCommand,
         reloadCommand,
+        searchCommand,
         configCommand,
         selectFileCommand,
         previousPageCommand,
