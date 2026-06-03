@@ -58,7 +58,7 @@
       },
       {
         "command": "secretStatusBar.toggleDisplay",
-        "title": "切换显示模式（Ctrl+Shift+T）",
+        "title": "切换显示模式（Shift+Space）",
         "category": "控制栏阅读"
       },
       {
@@ -165,8 +165,7 @@
     "keybindings": [
       {
         "command": "secretStatusBar.toggleDisplay",
-        "key": "ctrl+shift+t",
-        "mac": "cmd+shift+t",
+        "key": "shift+space",
         "when": "editorTextFocus || !editorTextFocus"
       },
       {

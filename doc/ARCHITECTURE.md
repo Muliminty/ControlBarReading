@@ -245,7 +245,7 @@ async function showContentDialog(
 #### 切换显示模式
 
 ```
-用户按 Ctrl+Shift+T 
+用户按 Shift+Space 
   → secretStatusBar.toggleDisplay 
     → toggleDisplayMode() 
       → refreshStatusBar() 
@@ -300,8 +300,7 @@ async function showContentDialog(
 ```json
 {
   "command": "secretStatusBar.toggleDisplay",
-  "key": "ctrl+shift+t",
-  "mac": "cmd+shift+t"
+  "key": "shift+space"
 },
 {
   "command": "secretStatusBar.previousPage",

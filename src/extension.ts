@@ -82,6 +82,51 @@ async function loadConfigFromFile(context?: vscode.ExtensionContext): Promise<Pl
 }
 
 /**
+ * 保存文件路径到配置（同步更新 JSON 配置文件 + VS Code 设置）
+ * 解决 selectFile/config 命令只写 VS Code 设置，但 getFilePath 优先读 JSON 文件导致加载旧路径的 bug
+ */
+async function saveFilePathToConfig(filePath: string, context?: vscode.ExtensionContext): Promise<void> {
+    // 1. 更新 JSON 配置文件（如果存在）
+    try {
+        let configPath: string | undefined;
+        
+        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+            configPath = path.join(
+                vscode.workspace.workspaceFolders[0].uri.fsPath,
+                'secret-status-bar.config.json'
+            );
+        } else if (context) {
+            configPath = path.join(
+                path.dirname(context.extensionPath),
+                'secret-status-bar.config.json'
+            );
+        }
+        
+        if (configPath && fs.existsSync(configPath)) {
+            const configContent = fs.readFileSync(configPath, 'utf-8');
+            const config: PluginConfig = JSON.parse(configContent);
+            config.filePath = filePath;
+            
+            // 如果文件在 files 列表中不存在，追加到列表
+            if (config.files && config.files.length > 0) {
+                if (!config.files.includes(filePath)) {
+                    config.files.push(filePath);
+                }
+            }
+            
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+            console.log('已同步更新配置文件:', configPath);
+        }
+    } catch (error) {
+        console.error('更新 JSON 配置文件失败:', error);
+    }
+    
+    // 2. 更新 VS Code 设置（兜底）
+    const config = vscode.workspace.getConfiguration('secretStatusBar');
+    await config.update('filePath', filePath, vscode.ConfigurationTarget.Workspace);
+}
+
+/**
  * 获取配置的文件路径（优先从 JSON 文件，其次从 VS Code 设置）
  */
 async function getFilePath(context?: vscode.ExtensionContext): Promise<string | undefined> {
@@ -1317,7 +1362,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
     
     /**
-     * 切换显示模式（按 Ctrl+Shift+T 切换）
+     * 切换显示模式（按 Shift+Space 切换）
      * 每次按下都会切换显示模式：真实内容 ↔ 迷惑内容
      */
     async function toggleDisplayMode() {
@@ -1437,6 +1482,31 @@ export function activate(context: vscode.ExtensionContext) {
                 settingsWebview.webview.onDidReceiveMessage(
                     async (message) => {
                         if (message.command === 'saveSettings') {
+                            // 同步更新 JSON 配置文件（如果存在）
+                            try {
+                                let configPath: string | undefined;
+                                if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+                                    configPath = path.join(
+                                        vscode.workspace.workspaceFolders[0].uri.fsPath,
+                                        'secret-status-bar.config.json'
+                                    );
+                                }
+                                if (configPath && fs.existsSync(configPath)) {
+                                    const existingConfig: PluginConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+                                    existingConfig.filePath = message.settings.filePath;
+                                    existingConfig.maxDisplayLength = message.settings.maxDisplayLength;
+                                    existingConfig.pageSize = message.settings.pageSize;
+                                    existingConfig.enableCache = message.settings.enableCache;
+                                    existingConfig.enableClickDialog = message.settings.enableClickDialog;
+                                    existingConfig.enableEncryption = message.settings.enableEncryption;
+                                    existingConfig.showPageInfo = message.settings.showPageInfo;
+                                    existingConfig.icon = message.settings.icon;
+                                    existingConfig.files = message.settings.files;
+                                    fs.writeFileSync(configPath, JSON.stringify(existingConfig, null, 2), 'utf-8');
+                                }
+                            } catch (e) { console.error('同步 JSON 配置失败:', e); }
+
+                            // 同步更新 VS Code 设置（兜底）
                             const config = vscode.workspace.getConfiguration('secretStatusBar');
                             await config.update('filePath', message.settings.filePath, vscode.ConfigurationTarget.Workspace);
                             await config.update('maxDisplayLength', message.settings.maxDisplayLength, vscode.ConfigurationTarget.Workspace);
@@ -1592,8 +1662,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
             
             if (filePath) {
-                const config = vscode.workspace.getConfiguration('secretStatusBar');
-                await config.update('filePath', filePath, vscode.ConfigurationTarget.Workspace);
+                await saveFilePathToConfig(filePath, context);
                 await loadAndUpdate();
                 vscode.window.showInformationMessage(`配置已更新: ${filePath}\n提示：也可以直接编辑 secret-status-bar.config.json 文件`);
             }
@@ -1639,8 +1708,7 @@ export function activate(context: vscode.ExtensionContext) {
                     filePath = selectedPath;
                 }
                 
-                const config = vscode.workspace.getConfiguration('secretStatusBar');
-                await config.update('filePath', filePath, vscode.ConfigurationTarget.Workspace);
+                await saveFilePathToConfig(filePath, context);
                 await loadAndUpdate();
                 vscode.window.showInformationMessage(`文件已选择: ${filePath}`);
             }
